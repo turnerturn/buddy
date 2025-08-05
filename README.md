@@ -1,34 +1,55 @@
-# buddy-portal
-Your new #1 buddy at Oneok.  This portal allows you to manage notes and frequently asked questions.  Buddy is our embedded AI agent which is an expert of all things contained within your notes and faqs.  You can interact with our portal’s chat dialog to explore all content contained within the Buddy portal.  Use natural language questions to chat with Buddy.  Buddy will guide you through finding the answers you need.
 
-### 🔧 Key Features
+# 📚 faq-buddy
 
-* **Navigation**
-
-  * Top App Bar with hamburger menu (Material UI or Bootstrap)
-  * Sidebar toggleable menu links: Home, Notes, FAQs, Chat, Feedback
-
-* **Notes & FAQs Pages**
-
-  * Vertical list of cards with:
-
-    * Title, content snippet, tags in footer
-    * Fuzzy search input
-    * Advanced filter button (tag multi-select)
-    * Edit modal (edit/save/delete)
-
-* **Chat Page**
-
-  * Chat UI with input and conversation history
-  * Prompts to ask Buddy natural questions
-
-* **Feedback Page**
-
-  * Form with emoji ratings, comments, and submission
+Welcome to your new #1 buddy at Oneok!  
+**faq-buddy** is a modern web portal that manages team knowledge through Notes and FAQs, and integrates an AI-powered chat assistant named **Buddy**. Buddy is embedded directly into the portal and trained to respond to natural-language support questions using curated FAQs and markdown-based IT instructions.
 
 ---
 
-### 📁 Project Structure (Recommended)
+### 🤖 About Buddy
+
+**Buddy** is a Copilot AI assistant designed to provide helpful, factual, and verifiable IT support guidance. It does **not guess** or fabricate answers. All responses are based on:
+
+- 📄 **Agent Instructions**:  
+  https://raw.githubusercontent.com/turnerturn/buddy/refs/heads/main/copilot-agent-instructions.md
+
+- 🧾 **FAQs Markdown Source** (referenced in the instructions):  
+  https://raw.githubusercontent.com/turnerturn/buddy/refs/heads/main/faqs.md
+
+Buddy operates using a strict chronological precedence rule:  
+> If two FAQs conflict, the most recent entry takes precedence.
+
+If no match is found, Buddy encourages the user to update the FAQ or escalate to human IT support.
+
+---
+
+### 🔧 Key Features
+
+#### 🌐 Navigation
+- Responsive top app bar with hamburger menu
+- Sidebar with links: Home, Notes, FAQs, Chat, Feedback
+
+#### 📒 Notes & FAQs
+- Vertical card list UI
+  - Each card shows title, snippet, and tags
+  - Inline fuzzy search
+  - Tag-based filtering via multi-select dropdown
+  - Edit modal for modifying or deleting entries
+
+#### 💬 Chat Page
+- SMS-style messaging UI (mobile + desktop optimized)
+- Editable user messages (linked list-style history)
+- Messages are sent to the OpenAI API through a **secure proxy**
+- System prompt enforces Copilot rules (no guessing, only factual content)
+
+#### 📝 Feedback Page
+- Emoji-based rating input
+- Open text comment box
+- Submit button to collect user impressions
+
+---
+
+### 🧱 Project Structure
 
 ```bash
 src/
@@ -53,23 +74,69 @@ src/
 
 ---
 
-### 🧱 Component Planning
+### 🧩 Component Overview
 
 | Component   | Purpose                                 |
-| ----------- | --------------------------------------- |
-| `NavBar`    | App bar with hamburger menu             |
-| `Sidebar`   | Navigation menu rendered conditionally  |
-| `CardList`  | Reusable for both Notes and FAQs        |
-| `EditModal` | Shared edit/delete modal for Notes/FAQs |
-| `TagFilter` | Multi-select filter popover             |
-| `ChatBox`   | Chat UI to interact with Buddy          |
+|-------------|------------------------------------------|
+| `NavBar`    | App bar with hamburger toggle            |
+| `Sidebar`   | Drawer-style nav for switching pages     |
+| `CardList`  | Displays Notes and FAQs as cards         |
+| `EditModal` | Shared modal for editing or deleting     |
+| `TagFilter` | Multi-select dropdown for tag filtering  |
+| `ChatBox`   | Buddy chat interface with editable input |
 
 ---
 
-### 📌 Best Practices
+### 🚦 Chat Behavior Rules
 
-* React Router DOM for page routing
-* Local state management via `useState`, or lift to context if shared
-* Tag filtering and fuzzy search implemented using `fuse.js`
-* Reusable components for Notes & FAQs
-* Use `uuid` for content identifiers
+- The **system prompt** includes strict AI guidance:
+  - Refer only to known instructions and FAQ content
+  - Decline to answer when context is missing
+- OpenAI API calls are made via a **secure proxy backend**
+- API key is stored as a **GitHub Secret or environment variable**  
+  (never exposed in the frontend)
+
+---
+
+### 💡 Best Practices
+
+- React + React Router DOM for routing
+- Fuse.js for fuzzy search logic
+- State managed via `useState` and lifted via props/context where needed
+- FAQs and instructions written in plain markdown, version-controlled in GitHub
+- Use `uuid` or short unique strings for Note/FAQ IDs
+
+---
+
+### 🔐 Secure Usage Guidelines
+
+Buddy does **not** embed API keys directly in frontend JavaScript.  
+Instead:
+
+- Use [Netlify Functions](https://docs.netlify.com/functions/overview/), [Vercel Functions](https://vercel.com/docs/functions), or a custom backend proxy.
+- Store `OPENAI_API_KEY` as a **GitHub Secret** or in `.env`
+- API requests route through a function like `/.netlify/functions/openai`
+
+---
+
+### 📎 Related Resources
+
+- [Copilot Instructions (Markdown)](https://raw.githubusercontent.com/turnerturn/buddy/refs/heads/main/copilot-agent-instructions.md)
+- [FAQs Markdown](https://raw.githubusercontent.com/turnerturn/buddy/refs/heads/main/faqs.md)
+- [Bootstrap Components](https://getbootstrap.com/docs/5.3/components/)
+- [OpenAI Chat API](https://platform.openai.com/docs/guides/gpt/chat-completions-api)
+
+---
+
+### 👥 Contributors
+
+- Matt Turner — Project Owner & Developer
+- CodeCommIT — Innovation Sprint Initiative Team
+
+---
+
+### 🚀 License
+
+MIT License (or your preferred internal license terms)
+
+---
