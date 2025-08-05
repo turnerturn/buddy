@@ -1,7 +1,7 @@
 
 # 📚 faq-buddy
 
-Welcome to your new #1 buddy at Ninja LLC!  
+Introducing your new #1 work buddy!  
 **faq-buddy** is a modern web portal that manages team knowledge through Notes and FAQs, and integrates an AI-powered chat assistant named **Buddy**. Buddy is embedded directly into the portal and trained to respond to natural-language support questions using curated FAQs and markdown-based IT instructions.
 
 ---
