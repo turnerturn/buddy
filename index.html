@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Buddy Copilot Chat</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.1.0/dist/fuse.min.js"></script>
   <style>
     body {
       background-color: #f8f9fa;
@@ -37,11 +39,14 @@
     .assistant-message {
       background-color: #ffffff;
       align-self: flex-start;
+      line-height: 1.5;
+      white-space: pre-wrap;
     }
 
     .message-row {
       display: flex;
       flex-direction: column;
+      position: relative;
     }
 
     .chat-input {
@@ -66,10 +71,134 @@
       width: 100px;
     }
 
+    .edit-icon {
+      position: absolute;
+      top: 0.5rem;
+      right: 0.5rem;
+      background: rgba(0,0,0,0.1);
+      border: none;
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      display: none;
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    .edit-controls {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+    }
+
+    .message-row:hover .edit-icon {
+      display: block;
+    }
+
+    .edit-mode {
+      margin-top: 0.5rem;
+    }
+
+    .loading-message {
+      opacity: 0.7;
+      font-style: italic;
+    }
+
+    .loading-dots {
+      animation: dots 1.5s infinite;
+    }
+
+    .streaming-cursor {
+      animation: blink 1s infinite;
+      font-weight: bold;
+    }
+
+    @keyframes blink {
+      0%, 50% { opacity: 1; }
+      51%, 100% { opacity: 0; }
+    }
+
+    @keyframes dots {
+      0%, 20% { opacity: 0; }
+      50% { opacity: 1; }
+      80%, 100% { opacity: 0; }
+    }
+
     @media (max-width: 768px) {
       .chat-bubble {
         max-width: 100%;
       }
+    }
+
+    /* FAQ Styles */
+    .faq-container {
+      padding: 2rem;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .search-container {
+      background: white;
+      padding: 1.5rem;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      margin-bottom: 2rem;
+    }
+
+    .faq-item {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      margin-bottom: 1rem;
+      padding: 1.5rem;
+      transition: transform 0.2s;
+    }
+
+    .faq-item:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    }
+
+    .faq-question {
+      font-weight: bold;
+      color: #0d6efd;
+      margin-bottom: 0.5rem;
+    }
+
+    .faq-answer {
+      color: #333;
+      line-height: 1.6;
+    }
+
+    .faq-date {
+      font-size: 0.875rem;
+      color: #666;
+      margin-top: 0.5rem;
+    }
+
+    .search-input {
+      font-size: 1.1rem;
+      padding: 0.75rem;
+    }
+
+    .search-results-count {
+      margin-top: 1rem;
+      color: #666;
+    }
+
+    .no-results {
+      text-align: center;
+      padding: 3rem;
+      color: #666;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 3rem;
+    }
+
+    .hidden {
+      display: none;
     }
   </style>
 </head>
@@ -84,30 +213,53 @@
       </button>
       <div class="collapse navbar-collapse" id="navbarNavDropdown">
         <ul class="navbar-nav ms-auto">
-          <li class="nav-item"><a class="nav-link active" href="#">Chat</a></li>
-          <li class="nav-item"><a class="nav-link" href="#">FAQs</a></li>
-          <li class="nav-item"><a class="nav-link" href="#">Support</a></li>
+          <li class="nav-item"><a class="nav-link" href="#">Home</a></li>
+          <li class="nav-item"><a class="nav-link" href="#" onclick="showChat()">Chat</a></li>
+          <li class="nav-item"><a class="nav-link" href="#" onclick="showFAQs()">FAQs</a></li>
         </ul>
       </div>
     </div>
   </nav>
 
   <!-- Chat View -->
-  <div class="chat-container d-flex flex-column" id="chatLog"></div>
+  <div class="chat-container d-flex flex-column" id="chatContainer">
+    <div id="chatLog"></div>
+  </div>
 
   <!-- Chat Input -->
   <div class="chat-input">
     <input type="text" class="form-control" id="userInput" placeholder="Ask a question..." />
     <button class="btn btn-primary" onclick="sendMessage()">Send</button>
   </div>
+
+  <!-- FAQ View -->
+  <div class="faq-container hidden" id="faqContainer">
+    <div class="search-container">
+      <h1 class="mb-3">Frequently Asked Questions</h1>
+      <div class="input-group">
+        <span class="input-group-text"><i class="bi bi-search"></i>🔍</span>
+        <input
+          type="text"
+          class="form-control search-input"
+          id="faqSearch"
+          placeholder="Search FAQs..."
+          oninput="searchFAQs()"
+        />
+      </div>
+      <div class="search-results-count" id="resultsCount"></div>
+    </div>
+    <div class="loading" id="faqLoading">Loading FAQs...</div>
+    <div id="faqList"></div>
+  </div>
 <script>
-  const apiKey = "__SECRET_PLACEHOLDER__";
-  console.log("Secret loaded securely at build...");
-    const systemPrompt = `You are Buddy, an embedded IT support Copilot assistant.
+  //const apiKey = "__SECRET_PLACEHOLDER__";
+  //    console.log("Secret loaded securely at build...");
+  const apiKey = "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";
+  const systemPrompt = `You are Buddy, an embedded IT support Copilot assistant.
 
 You must strictly follow the agent behavior rules defined in the Copilot Agent Instructions, available at:
 
-➡️ https://raw.githubusercontent.com/turnerturn/buddy/refs/heads/main/copilot-agent-instructions.md
+➡️ https://raw.githubusercontent.com/turnerturn/faq-buddy/refs/heads/main/copilot-agent-instructions.md
 
 The instructions define how you should:
 - Answer only with accurate, known IT support guidance
@@ -125,9 +277,176 @@ Use clear, concise formatting:
 - Use step-by-step instructions for known support tasks
 - Never return generic advice or hallucinated features
 
+IMPORTANT: When providing step-by-step instructions or any structured content, use proper line breaks and formatting. Each step should be on a new line, and use clear visual separation (e.g., "Step 1:", "Step 2:", etc.) to ensure readability in the chat interface. Preserve all newline characters in your responses to maintain proper formatting.
+
 You are not a general-purpose assistant. Your sole role is to act as an interface for the official instructions and FAQ content.`;
 
     let messages = [ { role: "system", content: systemPrompt } ];
+    let faqData = [];
+    let fuse;
+
+    // Load messages from session storage
+    function loadMessages() {
+      const saved = sessionStorage.getItem('buddyCopilotMessages');
+      if (saved) {
+        const parsedMessages = JSON.parse(saved);
+        // Keep system prompt and add saved messages
+        messages = [messages[0], ...parsedMessages.filter(msg => msg.role !== 'system')];
+      }
+    }
+
+    // Save messages to session storage
+    function saveMessages() {
+      const messagesToSave = messages.filter(msg => msg.role !== 'system' && msg.content.trim() !== '');
+      sessionStorage.setItem('buddyCopilotMessages', JSON.stringify(messagesToSave));
+    }
+
+    // Navigation functions
+    function showChat() {
+      document.getElementById('chatContainer').classList.remove('hidden');
+      document.querySelector('.chat-input').classList.remove('hidden');
+      document.getElementById('faqContainer').classList.add('hidden');
+
+      // Update active nav
+      document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
+      event.target.classList.add('active');
+    }
+
+    function showFAQs() {
+      document.getElementById('chatContainer').classList.add('hidden');
+      document.querySelector('.chat-input').classList.add('hidden');
+      document.getElementById('faqContainer').classList.remove('hidden');
+
+      // Update active nav
+      document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
+      event.target.classList.add('active');
+
+      // Load FAQs if not already loaded
+      if (faqData.length === 0) {
+        loadFAQs();
+      }
+    }
+
+    // FAQ functions
+    async function loadFAQs() {
+      try {
+        const response = await fetch('https://raw.githubusercontent.com/turnerturn/faq-buddy/refs/heads/main/faqs.md');
+        const markdown = await response.text();
+        faqData = parseFAQMarkdown(markdown);
+
+        // Initialize Fuse.js for search
+        fuse = new Fuse(faqData, {
+          keys: ['question', 'answer'],
+          threshold: 0.3,
+          includeScore: true,
+          includeMatches: true
+        });
+
+        document.getElementById('faqLoading').classList.add('hidden');
+        renderFAQs(faqData);
+        updateResultsCount(faqData.length);
+      } catch (error) {
+        console.error('Error loading FAQs:', error);
+        document.getElementById('faqLoading').innerHTML = 'Error loading FAQs. Please try again later.';
+      }
+    }
+
+    function parseFAQMarkdown(markdown) {
+      const faqs = [];
+      const lines = markdown.split('\n');
+      let currentFAQ = null;
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+
+        // Look for date patterns
+        const dateMatch = line.match(/\*\*(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\s+[AP]M)\*\*/);
+        if (dateMatch) {
+          if (currentFAQ) {
+            faqs.push(currentFAQ);
+          }
+          currentFAQ = {
+            date: dateMatch[1],
+            question: '',
+            answer: '',
+            id: faqs.length + 1
+          };
+          continue;
+        }
+
+        // Look for questions
+        const questionMatch = line.match(/\*\*Q:\*\*\s*(.+)/);
+        if (questionMatch && currentFAQ) {
+          currentFAQ.question = questionMatch[1];
+          continue;
+        }
+
+        // Look for answers
+        const answerMatch = line.match(/\*\*A:\*\*\s*(.+)/);
+        if (answerMatch && currentFAQ) {
+          currentFAQ.answer = answerMatch[1];
+          continue;
+        }
+
+        // Continue building answer if it spans multiple lines
+        if (currentFAQ && currentFAQ.answer && line && !line.startsWith('**') && !line.startsWith('-')) {
+          currentFAQ.answer += ' ' + line;
+        }
+      }
+
+      // Add the last FAQ if exists
+      if (currentFAQ) {
+        faqs.push(currentFAQ);
+      }
+
+      return faqs.filter(faq => faq.question && faq.answer);
+    }
+
+    function renderFAQs(faqs) {
+      const faqList = document.getElementById('faqList');
+      faqList.innerHTML = '';
+
+      if (faqs.length === 0) {
+        faqList.innerHTML = '<div class="no-results">No FAQs found matching your search.</div>';
+        return;
+      }
+
+      faqs.forEach(faq => {
+        const faqItem = document.createElement('div');
+        faqItem.className = 'faq-item';
+        faqItem.innerHTML = `
+          <div class="faq-question">Q: ${faq.question}</div>
+          <div class="faq-answer">A: ${faq.answer}</div>
+          <div class="faq-date">Added: ${faq.date}</div>
+        `;
+        faqList.appendChild(faqItem);
+      });
+    }
+
+    function searchFAQs() {
+      const searchTerm = document.getElementById('faqSearch').value.trim();
+
+      if (!searchTerm) {
+        renderFAQs(faqData);
+        updateResultsCount(faqData.length);
+        return;
+      }
+
+      const results = fuse.search(searchTerm);
+      const filteredFAQs = results.map(result => result.item);
+
+      renderFAQs(filteredFAQs);
+      updateResultsCount(filteredFAQs.length, searchTerm);
+    }
+
+    function updateResultsCount(count, searchTerm = '') {
+      const resultsCount = document.getElementById('resultsCount');
+      if (searchTerm) {
+        resultsCount.textContent = `Found ${count} result${count !== 1 ? 's' : ''} for "${searchTerm}"`;
+      } else {
+        resultsCount.textContent = `Showing ${count} FAQ${count !== 1 ? 's' : ''}`;
+      }
+    }
 
     function renderMessages() {
       const chatLog = document.getElementById("chatLog");
@@ -138,63 +457,221 @@ You are not a general-purpose assistant. Your sole role is to act as an interfac
           msgDiv.className = "message-row";
           const bubble = document.createElement("div");
           bubble.className = `chat-bubble ${msg.role === "user" ? "user-message ms-auto" : "assistant-message me-auto"}`;
-          bubble.innerHTML = msg.content;
+
+          // Display content (including partial content for streaming)
+          let content = msg.content || "";
+
+          // Preserve newlines by converting them to HTML line breaks
+          // Handle different newline formats: \n, \r\n, \r
+          content = content.replace(/\r\n/g, '<br>').replace(/\n/g, '<br>').replace(/\r/g, '<br>');
+
+          // Also preserve multiple consecutive newlines for better formatting
+          content = content.replace(/(<br>\s*){2,}/g, '<br><br>');
+
+          // Add cursor for streaming assistant messages (empty or actively being written)
+          if (msg.role === "assistant" && (content === "" || index === messages.length - 1)) {
+            const sendButton = document.querySelector('.chat-input button');
+            if (sendButton && sendButton.disabled) {
+              content += '<span class="streaming-cursor">|</span>';
+            }
+          }
+
+          bubble.innerHTML = content;
           msgDiv.appendChild(bubble);
 
+          // Add edit icon for user messages
           if (msg.role === "user") {
-            const editArea = document.createElement("textarea");
-            editArea.rows = 2;
-            editArea.className = "form-control mt-1";
-            editArea.value = msg.content;
-            editArea.id = "edit-" + index;
-
-            const editBtn = document.createElement("button");
-            editBtn.textContent = "Update";
-            editBtn.className = "btn btn-outline-secondary btn-sm edit-btn";
-            editBtn.onclick = () => {
-              const newText = document.getElementById("edit-" + index).value;
-              messages[index].content = newText;
-              renderMessages();
-            };
-
-            msgDiv.appendChild(editArea);
-            msgDiv.appendChild(editBtn);
+            const editIcon = document.createElement("button");
+            editIcon.className = "edit-icon";
+            editIcon.innerHTML = "✏️";
+            editIcon.onclick = () => toggleEditMode(index);
+            msgDiv.appendChild(editIcon);
           }
 
           chatLog.appendChild(msgDiv);
         }
       });
       chatLog.scrollTop = chatLog.scrollHeight;
+      saveMessages();
+    }
+
+    function toggleEditMode(index) {
+      const messageRow = document.querySelectorAll('.message-row')[index - 1]; // -1 because system message is not rendered
+      const currentText = messages[index].content;
+
+      // Check if already in edit mode
+      if (messageRow.querySelector('.edit-mode')) {
+        return;
+      }
+
+      // Create edit interface
+      const editDiv = document.createElement('div');
+      editDiv.className = 'edit-mode';
+
+      const textarea = document.createElement('textarea');
+      textarea.className = 'form-control';
+      textarea.rows = 2;
+      textarea.value = currentText;
+
+      const controlsDiv = document.createElement('div');
+      controlsDiv.className = 'edit-controls';
+
+      const saveBtn = document.createElement('button');
+      saveBtn.className = 'btn btn-success btn-sm';
+      saveBtn.textContent = 'Save';
+      saveBtn.onclick = () => saveEdit(index, textarea.value);
+
+      const cancelBtn = document.createElement('button');
+      cancelBtn.className = 'btn btn-secondary btn-sm';
+      cancelBtn.textContent = 'Cancel';
+      cancelBtn.onclick = () => renderMessages();
+
+      controlsDiv.appendChild(saveBtn);
+      controlsDiv.appendChild(cancelBtn);
+      editDiv.appendChild(textarea);
+      editDiv.appendChild(controlsDiv);
+
+      messageRow.appendChild(editDiv);
+      textarea.focus();
+    }
+
+    function saveEdit(index, newText) {
+      if (newText.trim()) {
+        messages[index].content = newText.trim();
+        renderMessages();
+      }
     }
 
     async function sendMessage() {
       const userInput = document.getElementById("userInput");
+      const sendButton = document.querySelector('.chat-input button');
       const content = userInput.value.trim();
       if (!content) return;
+
+      // Disable send button and input during processing
+      sendButton.disabled = true;
+      userInput.disabled = true;
+      sendButton.textContent = "Sending...";
+
+      // Add user message
       messages.push({ role: "user", content: content });
-      userInput.value = "";
+      userInput.value = ""; // Clear input
       renderMessages();
 
-      const res = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${apiKey}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
+      // Add empty assistant message for response
+      const assistantIndex = messages.length;
+      messages.push({ role: "assistant", content: "" });
+      renderMessages();
+
+      try {
+        // Use the standard Chat Completions API
+        const requestBody = {
           model: "gpt-4",
-          messages: messages,
-          temperature: 0.3
-        })
-      });
+          messages: messages.filter(msg => msg.content.trim() !== ""), // Exclude empty assistant message
+          temperature: 0.3,
+          max_tokens: 2048
+        };
 
-      const data = await res.json();
-      const reply = data.choices[0].message.content;
-      messages.push({ role: "assistant", content: reply });
-      renderMessages();
+        const res = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${apiKey}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(requestBody)
+        });
+
+        if (!res.ok) {
+          let errorMessage = `HTTP error! status: ${res.status}`;
+          if (res.status === 429) {
+            errorMessage = "Rate limit exceeded. Please wait a moment before sending another message.";
+          } else if (res.status === 401) {
+            errorMessage = "Authentication failed. Please check your API key.";
+          } else if (res.status === 403) {
+            errorMessage = "Access forbidden. Please check your API permissions.";
+          } else if (res.status >= 500) {
+            errorMessage = "Server error. Please try again later.";
+          }
+
+          // For errors, try to get the error message from response
+          try {
+            const errorData = await res.json();
+            if (errorData.error && errorData.error.message) {
+              errorMessage = errorData.error.message;
+            }
+          } catch (e) {
+            // If we can't parse the error response, use the default message
+          }
+
+          throw new Error(errorMessage);
+        }
+
+        const data = await res.json();
+
+        // Extract the assistant's response from the Chat Completions API format
+        let assistantResponse = "";
+        if (data.choices && data.choices.length > 0 && data.choices[0].message) {
+          assistantResponse = data.choices[0].message.content || "";
+        }
+
+        if (!assistantResponse.trim()) {
+          throw new Error('No valid response received from API');
+        }
+
+        // Update the assistant message with the response
+        messages[assistantIndex].content = assistantResponse;
+        renderMessages();
+
+      } catch (error) {
+        console.error('Error calling OpenAI Chat Completions API:', error);
+
+        // Remove empty assistant message and add error message
+        messages.pop();
+
+        let errorMessage = "I'm sorry, I'm having trouble connecting right now. Please try again later.";
+
+        // Provide more specific error messages
+        if (error.message.includes("Rate limit exceeded")) {
+          errorMessage = "⏱️ Rate limit exceeded. Please wait a moment before sending another message.";
+        } else if (error.message.includes("Authentication failed")) {
+          errorMessage = "🔐 Authentication issue. Please contact support.";
+        } else if (error.message.includes("Access forbidden")) {
+          errorMessage = "🚫 Access denied. Please contact support.";
+        } else if (error.message.includes("Server error")) {
+          errorMessage = "🔧 Server is experiencing issues. Please try again in a few minutes.";
+        } else if (error.message.includes("Failed to fetch")) {
+          errorMessage = "🌐 Network connection issue. Please check your internet and try again.";
+        }
+
+        messages.push({
+          role: "assistant",
+          content: errorMessage
+        });
+        renderMessages();
+      } finally {
+        // Re-enable send button and input
+        sendButton.disabled = false;
+        userInput.disabled = false;
+        sendButton.textContent = "Send";
+        userInput.focus();
+      }
     }
 
+    // Initialize chat view with active navigation
+    document.querySelector('.nav-link').classList.add('active');
+    loadMessages();
     renderMessages();
+
+    // Add enter key handling for chat input
+    document.getElementById('userInput').addEventListener('keypress', function(e) {
+      if (e.key === 'Enter' && !document.getElementById('chatContainer').classList.contains('hidden')) {
+        e.preventDefault();
+        const sendButton = document.querySelector('.chat-input button');
+        if (!sendButton.disabled) {
+          sendMessage();
+        }
+      }
+    });
   </script>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
