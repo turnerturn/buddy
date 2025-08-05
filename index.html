@@ -100,10 +100,9 @@
     <input type="text" class="form-control" id="userInput" placeholder="Ask a question..." />
     <button class="btn btn-primary" onclick="sendMessage()">Send</button>
   </div>
-
-  <script>
-    const apiKey = "sk-••••"; // Replace with your secure API key via backend proxy
-
+<script>
+  const apiKey = "__SECRET_PLACEHOLDER__";
+  console.log("Secret loaded securely at build...");
     const systemPrompt = `You are Buddy, an embedded IT support Copilot assistant.
 
 You must strictly follow the agent behavior rules defined in the Copilot Agent Instructions, available at:
